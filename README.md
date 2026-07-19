@@ -1,6 +1,7 @@
 # Task API
 
-A simple CRUD (Create, Read, Update, Delete) REST API built with FastAPI for managing tasks in memory. This project was developed as part of the FlyRank Backend Internship Week 2 Assignment.
+A simple CRUD (Create, Read, Update, Delete) REST API built with FastAPI for managing tasks in memory.
+* Week 2 Assignment: FlyRank Backend AI Engineering Internship.
 
 ## Features
 
@@ -14,6 +15,8 @@ A simple CRUD (Create, Read, Update, Delete) REST API built with FastAPI for man
 * Interactive Swagger UI documentation
 
 ## Tech Stack
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Framework-green)
 
 * Python 3.10+
 * FastAPI
@@ -37,7 +40,7 @@ task-api/
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/task-api.git
+git clone https://github.com/faizahsharieff/flyrank-backend-track.git
 cd task-api
 ```
 
@@ -175,19 +178,37 @@ content-type: application/json
   "error": "Task 99 not found"
 }
 ```
-
-## Swagger UI Screenshot
-
-```markdown
-![Swagger-UI](screenshots/swagger-ui.png)
+### Invalid Request
 ```
+POST /tasks
+
+{
+  "title": ""
+}
+```
+## Response
+```
+{
+  "detail": "Title cannot be empty"
+}
+```
+
+## Testing
+
+The API was tested using:
+
+- Swagger UI
+- curl commands
+- FastAPI automatic validation
+
+All CRUD endpoints were verified successfully.
+
+## API Documentation Preview
+
+![Swagger-UI](screenshots/swagger-ui.png)
 
 ## Notes
 
 * Tasks are stored in memory.
 * Data will be lost when the server restarts.
 * No database is used in this version.
-
-## Author
-
-Created as part of the FlyRank Backend Internship – Week 2 Assignment.

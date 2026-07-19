@@ -31,8 +31,23 @@ def health():
     }
 
 @app.get("/tasks")
-def get_tasks():
-    return tasks
+def get_tasks(
+    done: bool | None = None,
+    title: str | None = None
+):
+
+    result = tasks
+
+    if done is not None:
+        result = [task for task in result if task["done"] == done]
+
+    if title:
+        result = [
+            task for task in result
+            if title.lower() in task["title"].lower()
+        ]
+
+    return result
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):

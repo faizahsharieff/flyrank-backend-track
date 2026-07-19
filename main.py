@@ -12,6 +12,9 @@ tasks = [
 class TaskCreate(BaseModel):
     title: str
 
+class TaskUpdate(BaseModel):
+    title: str
+    done: bool
 
 @app.get("/")
 def root():
@@ -61,3 +64,32 @@ def create_task(task: TaskCreate):
     tasks.append(new_task)
 
     return new_task
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, updated_task: TaskUpdate):
+
+    for task in tasks:
+        if task["id"] == task_id:
+            task["title"] = updated_task.title
+            task["done"] = updated_task.done
+            return task
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Task {task_id} not found"
+    )
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int):
+
+    for task in tasks:
+        if task["id"] == task_id:
+            tasks.remove(task)
+            return {
+                "message": f"Task {task_id} deleted"
+            }
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Task {task_id} not found"
+    )

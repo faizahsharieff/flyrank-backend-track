@@ -1,7 +1,10 @@
 from fastapi import FastAPI,HTTPException, status
 from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(
+    title="Task API",
+    description="Week 2 FlyRank Assignment: A simple CRUD API to manage tasks",
+)
 
 tasks = [
     {"id": 1, "title": "Study FastAPI", "done": False},

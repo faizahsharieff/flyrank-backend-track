@@ -1,4 +1,4 @@
-from fastapi import FastAPI,HTTPException, status
+from fastapi import FastAPI,HTTPException, Response, status
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -97,15 +97,13 @@ def update_task(task_id: int, updated_task: TaskUpdate):
         detail=f"Task {task_id} not found"
     )
 
-@app.delete("/tasks/{task_id}")
+@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(task_id: int):
 
     for task in tasks:
         if task["id"] == task_id:
             tasks.remove(task)
-            return {
-                "message": f"Task {task_id} deleted"
-            }
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     raise HTTPException(
         status_code=404,

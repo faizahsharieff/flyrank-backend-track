@@ -92,3 +92,38 @@ def get_task(task_id: int):
         "title": row["title"],
         "done": bool(row["done"])
     }
+
+@app.post("/tasks", status_code=201)
+def create_task(task: TaskCreate):
+
+    if task.title.strip() == "":
+        raise HTTPException(
+            status_code=400,
+            detail="Title cannot be empty"
+        )
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "INSERT INTO tasks(title, done) VALUES (?, ?)",
+        (task.title, 0)
+    )
+
+    conn.commit()
+
+    task_id = cursor.lastrowid
+
+    row = conn.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (task_id,)
+    ).fetchone()
+
+    conn.close()
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "done": bool(row["done"])
+    }

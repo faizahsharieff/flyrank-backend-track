@@ -68,3 +68,27 @@ def get_tasks(
         }
         for row in rows
     ]
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int):
+
+    conn = get_connection()
+
+    row = conn.execute(
+        "SELECT * FROM tasks WHERE id = ?",
+        (task_id,)
+    ).fetchone()
+
+    conn.close()
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "done": bool(row["done"])
+    }

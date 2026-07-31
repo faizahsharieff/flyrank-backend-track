@@ -1,26 +1,59 @@
 # Task API
 
-A simple CRUD (Create, Read, Update, Delete) REST API built with FastAPI for managing tasks in memory.
-* Week 2 Assignment: FlyRank Backend AI Engineering Internship.
+A CRUD (Create, Read, Update, Delete) REST API built with FastAPI and SQLite for managing tasks.
+* FlyRank Backend AI Engineering Internship - Week 3 Assignment: Connecting CRUD to a database.
 
-## Features
+---
+# Overview
 
-* Create new tasks
-* Retrieve all tasks
-* Retrieve a task by ID
-* Update existing tasks
-* Delete tasks
-* Input validation
-* Proper HTTP status codes
-* Interactive Swagger UI documentation
+The Task API is a RESTful API built with FastAPI and SQLite for managing tasks.
+
+Unlike the previous in-memory implementation, task data is stored in a SQLite database (`tasks.db`), allowing data to persist across application restarts.
+
+#### The API supports full CRUD operations, request validation using Pydantic, automatic database initialization, and interactive documentation through Swagger UI.
+---
+# Features
+
+| Feature | Description |
+|----------|-------------|
+| RESTful API | Implements CRUD operations using HTTP methods |
+| Create Tasks | Add new tasks |
+| Read Tasks | Retrieve all tasks or a specific task |
+| Update Tasks | Modify an existing task |
+| Delete Tasks | Remove tasks from the database |
+| Request Validation | Validates incoming request data using Pydantic |
+| Error Handling | Returns appropriate HTTP status codes and messages |
+| Swagger Documentation | Interactive API documentation and testing |
+| SQLite Storage | Stores tasks persistently in a database |
+| Auto Database Setup | Automatically creates database and tables |
+| Seed Data | Inserts sample tasks on first run only |
+
+---
+# Why SQLite?
+
+## SQLite was chosen because it is:
+
+- Lightweight and serverless
+- Easy to set up and use
+- Stored in a single file (`tasks.db`)
+- Suitable for small applications and local development
+- Persistent across application restarts
+
+Unlike in-memory storage, SQLite ensures that created tasks remain available even after restarting the FastAPI server.
+
 
 ## Tech Stack
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Framework-green)
-
-* Python 3.10+
-* FastAPI
-* Uvicorn
+![SQLite](https://img.shields.io/badge/SQLite-Database-blue)
+[![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://pydantic.dev/docs/validation/latest/get-started/contributing/#badges)
+| Technology | Purpose |
+|------------|---------|
+| Python | Programming Language |
+| FastAPI | Backend Framework |
+| SQLite3 | Database |
+| Uvicorn | ASGI Server |
+| Pydantic | Request Validation |
 
 ## Project Structure
 
@@ -28,14 +61,25 @@ A simple CRUD (Create, Read, Update, Delete) REST API built with FastAPI for man
 task-api/
 │
 ├── main.py
+├── database.py
 ├── requirements.txt
 ├── README.md
 ├── .gitignore
 └── screenshots/
-    └── swagger-ui.png
+    ├── swagger-ui.png
+    └── db-browser.png
 ```
 
-## Installation
+# Running the Application
+
+Follow these steps to run the project locally.
+
+| Step | Command / Action |
+|---------|----------------|
+| **1. Activate Virtual Environment** | `.\venv\Scripts\activate` |
+| **2. Install Dependencies** | `pip install -r requirements.txt` |
+| **3. Start the Server** | `uvicorn main:app --reload` |
+| **4. Open Swagger UI** | `http://127.0.0.1:8000/docs` |
 
 ### Clone the Repository
 
@@ -96,7 +140,119 @@ ReDoc:
 http://localhost:8000/redoc
 ```
 
-## Sample Task Object
+# Automatic Database Setup
+
+When the application starts:
+
+1. `tasks.db` is created automatically if it does not exist.
+2. The `tasks` table is created automatically if it does not exist.
+3. Three sample tasks are seeded into the database.
+4. Seed data is inserted only when the table is empty.
+
+This prevents duplicate seed data from being created on every restart.
+
+---
+
+# Database Schema
+
+| Column | Type | Description |
+|----------|----------|-------------|
+| id | INTEGER | Primary Key, Auto Increment |
+| title | TEXT | Task title |
+| done | INTEGER | Completion status (0 or 1) |
+
+---
+
+# API Endpoints
+
+| Method | Endpoint | Description |
+| :----: | -------- | ----------- |
+| GET | `/` | Returns API information |
+| GET | `/health` | Returns the health status of the application |
+| GET | `/tasks` | Retrieves all tasks |
+| GET | `/tasks/{id}` | Retrieves a task by its ID |
+| POST | `/tasks` | Creates a new task |
+| PUT | `/tasks/{id}` | Updates an existing task |
+| DELETE | `/tasks/{id}` | Deletes a task |
+
+---
+
+# Example Requests
+
+## Create a Task
+
+### Request Body
+
+```json
+{
+  "title": "Complete SQLite Assignment"
+}
+```
+
+### Response
+
+```json
+{
+  "id": 4,
+  "title": "Complete SQLite Assignment",
+  "done": false
+}
+```
+
+---
+
+## Update a Task
+
+### Request Body
+
+```json
+{
+  "title": "Submit Assignment",
+  "done": true
+}
+```
+
+### Response
+
+```json
+{
+  "id": 1,
+  "title": "Submit Assignment",
+  "done": true
+}
+```
+
+---
+
+## Get All Tasks
+
+### Response
+
+```json
+[
+  {
+    "id": 1,
+    "title": "Study FastAPI",
+    "done": false
+  },
+  {
+    "id": 2,
+    "title": "Complete Assignment",
+    "done": false
+  },
+  {
+    "id": 3,
+    "title": "Push to GitHub",
+    "done": true
+  }
+]
+```
+
+---
+
+## Get Task by ID
+
+### Response
 
 ```json
 {
@@ -106,109 +262,114 @@ http://localhost:8000/redoc
 }
 ```
 
-## Endpoints
+---
 
-| Method | Endpoint    | Description      |
-| ------ | ----------- | ---------------- |
-| GET    | /           | API information  |
-| GET    | /health     | Health check     |
-| GET    | /tasks      | Get all tasks    |
-| GET    | /tasks/{id} | Get a task by ID |
-| POST   | /tasks      | Create a task    |
-| PUT    | /tasks/{id} | Update a task    |
-| DELETE | /tasks/{id} | Delete a task    |
+## Delete a Task
 
-## Example Requests
+### Response
 
-### Get All Tasks
-
-```bash
-curl -i http://localhost:8000/tasks
+```text
+204 No Content
 ```
 
-### Create a Task
+---
 
-```bash
-curl -i -X POST http://localhost:8000/tasks \
--H "Content-Type: application/json" \
--d '{"title":"Study FastAPI"}'
+# Example SQL Queries
+
+## Retrieve All Tasks
+
+```sql
+SELECT * FROM tasks;
 ```
 
-### Update a Task
+## Count Tasks
 
-```bash
-curl -i -X PUT http://localhost:8000/tasks/1 \
--H "Content-Type: application/json" \
--d '{"title":"Updated Task","done":true}'
+```sql
+SELECT COUNT(*) FROM tasks;
 ```
 
-### Delete a Task
+## Retrieve Completed Tasks
 
-```bash
-curl -i -X DELETE http://localhost:8000/tasks/1
+```sql
+SELECT * FROM tasks WHERE done = 1;
 ```
 
-## Example Response
+## Output on retrieval :
 
-```http
-HTTP/1.1 201 Created
-content-type: application/json
+|id|title|done|
+|-----|-------|------|
+|3|Push to GitHub|1|
+|4|Try SQLite Database |1|
 
-{
-  "id": 1,
-  "title": "Study FastAPI",
-  "done": false
-}
+
+These queries were tested using **DB Browser for SQLite**.
+
+---
+
+# Persistence Verification
+
+SQLite persistence was verified by:
+
+1. Creating a task using `POST /tasks`
+2. Restarting the FastAPI server
+3. Calling `GET /tasks`
+4. Confirming the task still exists
+
+This demonstrates that data survives server restarts.
+
+---
+# API Documentation Preview
+![Swagger-UI](screenshots/swagger-ui.png)
+# DB Browser for SQLite 
+![DB Browser Screenshot](screenshots/db-browser.png)
+
+---
+
+# Application Flow
+
+```text
+                    User / Client
+                          │
+                          ▼
+                     HTTP Request
+                          │
+                          ▼
+                 FastAPI Application
+                      (main.py)
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+   Validate Request   Process Request   Execute SQL
+      (Pydantic)                          Query
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                   SQLite Database
+                      (tasks.db)
+                          │
+                          ▼
+                    HTTP Response
+                          │
+                          ▼
+                 Browser / Swagger UI
 ```
 
-## Status Codes
+---
 
-| Status Code | Meaning            |
-| ----------- | ------------------ |
-| 200         | Successful request |
-| 201         | Resource created   |
-| 204         | Resource deleted   |
-| 400         | Invalid input      |
-| 404         | Resource not found |
-
-## Error Response Example
-
-```json
-{
-  "error": "Task 99 not found"
-}
-```
-### Invalid Request
-```
-POST /tasks
-
-{
-  "title": ""
-}
-```
-## Response
-```
-{
-  "detail": "Title cannot be empty"
-}
-```
-
-## Testing
+# Testing
 
 The API was tested using:
 
 - Swagger UI
 - curl commands
-- FastAPI automatic validation
+- DB Browser for SQLite
+- Manual CRUD verification
 
-All CRUD endpoints were verified successfully.
+All CRUD operations were successfully verified against the SQLite database.
 
-## API Documentation Preview
+---
 
-![Swagger-UI](screenshots/swagger-ui.png)
-
-## Notes
-
-* Tasks are stored in memory.
-* Data will be lost when the server restarts.
-* No database is used in this version.
+# Notes
+- Seed data runs only once.
+- Parameterized SQL queries are used to help prevent SQL injection.

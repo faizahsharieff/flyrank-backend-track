@@ -2,3 +2,4 @@ venv/
 __pycache__/
 *.pyc
 tasks.db
+tasks.db-journal

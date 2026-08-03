@@ -320,6 +320,7 @@ This demonstrates that data survives server restarts.
 ---
 # API Documentation Preview
 ![Swagger-UI](screenshots/swagger-ui.png)
+![W3-Swagger-UI](screenshots/W3-swagger-ui.png)
 # DB Browser for SQLite 
 ![DB Browser Screenshot](screenshots/db-browser.png)
 

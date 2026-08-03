@@ -4,7 +4,7 @@ from database import get_connection, init_db
 
 app = FastAPI(
     title="Task API",
-    description="Week 2 FlyRank Assignment: A simple CRUD API to manage tasks",
+    description="Week 3 FlyRank Assignment: A CRUD REST API built with FastAPI and SQLite for managing tasks.",
 )
 
 @app.on_event("startup")

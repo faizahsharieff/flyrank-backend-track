@@ -4,7 +4,7 @@ from database import get_connection, init_db
 
 app = FastAPI(
     title="Task API",
-    description="Week 3 FlyRank Assignment: A CRUD REST API built with FastAPI and SQLite for managing tasks.",
+    description="Week 3 FlyRank Assignment: A CRUD REST API built with FastAPI and PostgreSQL for managing tasks.",
 )
 
 @app.on_event("startup")
@@ -33,38 +33,23 @@ def health():
     }
 
 @app.get("/tasks")
-def get_tasks(
-    done: bool | None = None,
-    title: str | None = None
-):
+def get_tasks():
 
     conn = get_connection()
 
-    query = "SELECT * FROM tasks"
-    params = []
-
-    conditions = []
-
-    if done is not None:
-        conditions.append("done = ?")
-        params.append(int(done))
-
-    if title:
-        conditions.append("title LIKE ?")
-        params.append(f"%{title}%")
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-
-    rows = conn.execute(query, params).fetchall()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, title, done FROM tasks"
+        )
+        rows = cur.fetchall()
 
     conn.close()
 
     return [
         {
-            "id": row["id"],
-            "title": row["title"],
-            "done": bool(row["done"])
+            "id": row[0],
+            "title": row[1],
+            "done": row[2]
         }
         for row in rows
     ]
@@ -74,23 +59,26 @@ def get_task(task_id: int):
 
     conn = get_connection()
 
-    row = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (task_id,)
-    ).fetchone()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, title, done FROM tasks WHERE id = %s",
+            (task_id,)
+        )
+
+        row = cur.fetchone()
 
     conn.close()
 
     if row is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Task {task_id} not found"
+            detail="Task not found"
         )
 
     return {
-        "id": row["id"],
-        "title": row["title"],
-        "done": bool(row["done"])
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
     }
 
 @app.post("/tasks", status_code=201)

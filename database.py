@@ -1,6 +1,7 @@
 import os
 import psycopg
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -8,7 +9,13 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 def get_connection():
-    return psycopg.connect(DATABASE_URL)
+    for _ in range(10):
+        try:
+            return psycopg.connect(DATABASE_URL)
+        except psycopg.OperationalError:
+            time.sleep(2)
+
+    raise Exception("Could not connect to PostgreSQL")
 
 
 def init_db():

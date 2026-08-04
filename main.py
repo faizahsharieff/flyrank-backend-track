@@ -92,28 +92,25 @@ def create_task(task: TaskCreate):
 
     conn = get_connection()
 
-    cursor = conn.cursor()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO tasks(title, done)
+            VALUES (%s, %s)
+            RETURNING id, title, done
+            """,
+            (task.title, False)
+        )
 
-    cursor.execute(
-        "INSERT INTO tasks(title, done) VALUES (?, ?)",
-        (task.title, 0)
-    )
+        row = cur.fetchone()
 
     conn.commit()
-
-    task_id = cursor.lastrowid
-
-    row = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (task_id,)
-    ).fetchone()
-
     conn.close()
 
     return {
-        "id": row["id"],
-        "title": row["title"],
-        "done": bool(row["done"])
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
     }
 
 @app.put("/tasks/{task_id}")
@@ -121,45 +118,37 @@ def update_task(task_id: int, updated_task: TaskUpdate):
 
     conn = get_connection()
 
-    existing = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (task_id,)
-    ).fetchone()
+    with conn.cursor() as cur:
 
-    if existing is None:
-        conn.close()
+        cur.execute(
+            """
+            UPDATE tasks
+            SET title = %s, done = %s
+            WHERE id = %s
+            RETURNING id, title, done
+            """,
+            (
+                updated_task.title,
+                updated_task.done,
+                task_id
+            )
+        )
 
+        row = cur.fetchone()
+
+    conn.commit()
+    conn.close()
+
+    if row is None:
         raise HTTPException(
             status_code=404,
             detail=f"Task {task_id} not found"
         )
 
-    conn.execute(
-        """
-        UPDATE tasks
-        SET title = ?, done = ?
-        WHERE id = ?
-        """,
-        (
-            updated_task.title,
-            int(updated_task.done),
-            task_id
-        )
-    )
-
-    conn.commit()
-
-    row = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (task_id,)
-    ).fetchone()
-
-    conn.close()
-
     return {
-        "id": row["id"],
-        "title": row["title"],
-        "done": bool(row["done"])
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
     }
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -167,25 +156,25 @@ def delete_task(task_id: int):
 
     conn = get_connection()
 
-    existing = conn.execute(
-        "SELECT * FROM tasks WHERE id = ?",
-        (task_id,)
-    ).fetchone()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM tasks
+            WHERE id = %s
+            RETURNING id
+            """,
+            (task_id,)
+        )
 
-    if existing is None:
-        conn.close()
+        row = cur.fetchone()
 
+    conn.commit()
+    conn.close()
+
+    if row is None:
         raise HTTPException(
             status_code=404,
             detail=f"Task {task_id} not found"
         )
-
-    conn.execute(
-        "DELETE FROM tasks WHERE id = ?",
-        (task_id,)
-    )
-
-    conn.commit()
-    conn.close()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

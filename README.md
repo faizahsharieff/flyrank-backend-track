@@ -1,14 +1,14 @@
 # Task API
 
-A CRUD (Create, Read, Update, Delete) REST API built with FastAPI and SQLite for managing tasks.
-* FlyRank Backend AI Engineering Internship - Week 3 Assignment: Connecting CRUD to a database.
+A CRUD (Create, Read, Update, Delete) REST API built with FastAPI and PostgreSQL for managing tasks.
+* FlyRank Backend AI Engineering Internship - Week 3 Assignment: Containerize your stack & connect CRUD to Postgres.
 
 ---
 # Overview
 
-The Task API is a RESTful API built with FastAPI and SQLite for managing tasks.
+The Task API is a RESTful API built with FastAPI and PostgreSQL.
 
-Unlike the previous in-memory implementation, task data is stored in a SQLite database (`tasks.db`), allowing data to persist across application restarts.
+Unlike previous in-memory or SQLite implementations, task data is stored in a containerized PostgreSQL database server, allowing data to persist across container restarts using Docker volumes.
 
 #### The API supports full CRUD operations, request validation using Pydantic, automatic database initialization, and interactive documentation through Swagger UI.
 ---
@@ -23,35 +23,40 @@ Unlike the previous in-memory implementation, task data is stored in a SQLite da
 | Delete Tasks | Remove tasks from the database |
 | Request Validation | Validates incoming request data using Pydantic |
 | Error Handling | Returns appropriate HTTP status codes and messages |
+| Parameterized Queries | Prevents SQL injection using driver placeholders (`%s` / `$1`) |
+| PostgreSQL Storage | Stores tasks persistently in a Dockerized PostgreSQL database server |
+| Docker & Compose | Whole stack (API + DB) starts with a single command (`docker compose up`) |
+| Secrets via `.env` | Environment secrets managed securely with `.env` (git-ignored) and `.env.example` |
 | Swagger Documentation | Interactive API documentation and testing |
-| SQLite Storage | Stores tasks persistently in a database |
-| Auto Database Setup | Automatically creates database and tables |
-| Seed Data | Inserts sample tasks on first run only |
+| Auto Database Setup | Automatically creates table and seeds initial tasks on first boot |
+| Persistence | Data survives container restarts using Docker named volumes |
 
 ---
-# Why SQLite?
+# Why PostgreSQL & Docker?
+PostgreSQL in Docker was chosen because:
 
-## SQLite was chosen because it is:
+- **Industry Standard:** PostgreSQL is a robust, production-grade relational database server.
+- **Environment Isolation:** Docker containers eliminate "works on my machine" issues by running standard images.
+- **One-Command Setup:** `docker compose up` spins up both the API and database services automatically.
+- **Persistence via Volumes:** Named Docker volumes keep database rows safe even if containers are destroyed.
+- **Config via Environment:** Database credentials are provided via `.env` without hardcoding secrets.
 
-- Lightweight and serverless
-- Easy to set up and use
-- Stored in a single file (`tasks.db`)
-- Suitable for small applications and local development
-- Persistent across application restarts
-
-Unlike in-memory storage, SQLite ensures that created tasks remain available even after restarting the FastAPI server.
-
+---
 
 ## Tech Stack
 ![Python](https://img.shields.io/badge/Python-3.10+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Framework-green)
-![SQLite](https://img.shields.io/badge/SQLite-Database-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue)
+![Docker](https://img.shields.io/badge/Docker-Compose-blue)
 [![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://pydantic.dev/docs/validation/latest/get-started/contributing/#badges)
+
 | Technology | Purpose |
 |------------|---------|
 | Python | Programming Language |
 | FastAPI | Backend Framework |
-| SQLite3 | Database |
+| PostgreSQL | Relational Database Engine |
+| Psycopg / SQLModel | Database Driver / ORM |
+| Docker & Docker Compose | Containerization & Orchestration |
 | Uvicorn | ASGI Server |
 | Pydantic | Request Validation |
 
@@ -62,68 +67,58 @@ task-api/
 │
 ├── main.py
 ├── database.py
+├── Dockerfile
+├── compose.yaml
+├── .env.example
+├── .env                 # Git-ignored
 ├── requirements.txt
 ├── README.md
 ├── .gitignore
 └── screenshots/
     ├── swagger-ui.png
-    └── db-browser.png
+    └── psql-db.png
 ```
 
 # Running the Application
 
-Follow these steps to run the project locally.
+Follow these steps to run the stack using Docker Compose.
 
-| Step | Command / Action |
-|---------|----------------|
-| **1. Activate Virtual Environment** | `.\venv\Scripts\activate` |
-| **2. Install Dependencies** | `pip install -r requirements.txt` |
-| **3. Start the Server** | `uvicorn main:app --reload` |
-| **4. Open Swagger UI** | `http://127.0.0.1:8000/docs` |
-
-### Clone the Repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/faizahsharieff/flyrank-backend-track.git
 cd task-api
 ```
 
-### Create a Virtual Environment
+### 2. Configure Environment Secrets
+Copy `.env.example` to create your local `.env` file:
 
 ```bash
-python -m venv venv
+cp .env.example .env
 ```
-
-### Activate the Environment
-
-**Windows**
-
+Ensure your `.env` contains the required database settings: 
+```env
+DATABASE_URL=postgresql://postgres:dev@db:5432/tasks
+```
+### 3. Start the application
 ```bash
-venv\Scripts\activate
+docker compose up
 ```
+This starts:
 
-**Linux / macOS**
-
-```bash
-source venv/bin/activate
-```
-
-### Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-## Run the Application
-
-```bash
-uvicorn main:app --reload
-```
-
-Server will start at:
+* FastAPI application
+* PostgreSQL database
+* Database volume for persistent storage
+---
+The API will be available at:
 
 ```text
 http://localhost:8000
+```
+
+### 4. Stop the application
+```bash
+docker compose down
 ```
 
 ## API Documentation
@@ -134,32 +129,13 @@ Swagger UI:
 http://localhost:8000/docs
 ```
 
-ReDoc:
-
-```text
-http://localhost:8000/redoc
-```
-
-# Automatic Database Setup
-
-When the application starts:
-
-1. `tasks.db` is created automatically if it does not exist.
-2. The `tasks` table is created automatically if it does not exist.
-3. Three sample tasks are seeded into the database.
-4. Seed data is inserted only when the table is empty.
-
-This prevents duplicate seed data from being created on every restart.
-
----
-
 # Database Schema
 
 | Column | Type | Description |
 |----------|----------|-------------|
-| id | INTEGER | Primary Key, Auto Increment |
+| id | INTEGER | Primary Key |
 | title | TEXT | Task title |
-| done | INTEGER | Completion status (0 or 1) |
+| done | BOOLEAN | Completion status |
 
 ---
 
@@ -185,7 +161,7 @@ This prevents duplicate seed data from being created on every restart.
 
 ```json
 {
-  "title": "Complete SQLite Assignment"
+  "title": "Complete Docker Assignment"
 }
 ```
 
@@ -194,7 +170,7 @@ This prevents duplicate seed data from being created on every restart.
 ```json
 {
   "id": 4,
-  "title": "Complete SQLite Assignment",
+  "title": "Complete Docker Assignment",
   "done": false
 }
 ```
@@ -239,15 +215,9 @@ This prevents duplicate seed data from being created on every restart.
     "id": 2,
     "title": "Complete Assignment",
     "done": false
-  },
-  {
-    "id": 3,
-    "title": "Push to GitHub",
-    "done": true
   }
 ]
 ```
-
 ---
 
 ## Get Task by ID
@@ -261,101 +231,42 @@ This prevents duplicate seed data from being created on every restart.
   "done": false
 }
 ```
+---
+# Persistence
+
+Task data is stored in PostgreSQL using a Docker named volume, ensuring that data remains available even after containers are stopped or recreated.
 
 ---
-
-## Delete a Task
-
-### Response
-
-```text
-204 No Content
-```
-
----
-
-# Example SQL Queries
-
-## Retrieve All Tasks
-
-```sql
-SELECT * FROM tasks;
-```
-
-## Count Tasks
-
-```sql
-SELECT COUNT(*) FROM tasks;
-```
-
-## Retrieve Completed Tasks
-
-```sql
-SELECT * FROM tasks WHERE done = 1;
-```
-
-## Output on retrieval :
-
-|id|title|done|
-|-----|-------|------|
-|3|Push to GitHub|1|
-|4|Try SQLite Database |1|
-
-
-These queries were tested using **DB Browser for SQLite**.
-
----
-
-# Persistence Verification
-
-SQLite persistence was verified by:
-
-1. Creating a task using `POST /tasks`
-2. Restarting the FastAPI server
-3. Calling `GET /tasks`
-4. Confirming the task still exists
-
-This demonstrates that data survives server restarts.
-
----
+# Database Preview
+![PostgreSQL Database](screenshots/psql-db.png)
 # API Documentation Preview
-![Swagger-UI](screenshots/swagger-ui.png)
 ![W3-Swagger-UI](screenshots/W3-swagger-ui.png)
-# DB Browser for SQLite 
-![DB Browser Screenshot](screenshots/db-browser.png)
-
 ---
 
 # Application Flow
 
 ```text
-                    User / Client
-                          │
-                          ▼
-                     HTTP Request
-                          │
-                          ▼
-                 FastAPI Application
-                      (main.py)
-                          │
-          ┌───────────────┼───────────────┐
-          │               │               │
-          ▼               ▼               ▼
-   Validate Request   Process Request   Execute SQL
-      (Pydantic)                          Query
-          │               │                │
-          └───────────────┼────────────────┘
-                          ▼
-                   SQLite Database
-                      (tasks.db)
-                          │
-                          ▼
-                    HTTP Response
-                          │
-                          ▼
-                 Browser / Swagger UI
+                User / Client
+                      │
+                      ▼
+                 HTTP Request
+                      │
+                      ▼
+              FastAPI Application
+                   (main.py)
+                      │
+          Validate Request (Pydantic)
+                      │
+                      ▼
+             PostgreSQL Database
+              (Docker Container)
+                      │
+                      ▼
+                HTTP Response
+                      │
+                      ▼
+              Browser / Swagger UI
 ```
-
 ---
 
 # Testing
@@ -364,13 +275,31 @@ The API was tested using:
 
 - Swagger UI
 - curl commands
-- DB Browser for SQLite
+- PostgreSQL
 - Manual CRUD verification
 
-All CRUD operations were successfully verified against the SQLite database.
+All CRUD operations were successfully verified against the PostgreSQL database.
 
+## cURL Test
+
+Create a new task:
+
+```bash
+curl.exe -i -X POST http://localhost:8000/tasks -H "Content-Type: application/json" -d "{\"title\":\"Learn Docker\"}"
+```
+Expected response:
+
+```json
+{
+  "id": 4,
+  "title": "Learn Docker",
+  "done": false
+}
+```
 ---
 
 # Notes
-- Seed data runs only once.
+- Database tables are created automatically on startup.
 - Parameterized SQL queries are used to help prevent SQL injection.
+- Environment variables are managed using a `.env` file.
+- Docker volumes provide persistent database storage.

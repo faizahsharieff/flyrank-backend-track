@@ -5,6 +5,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:dev@db:5432/tasks
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      PORT: ${PORT}
     depends_on:
       - db
 

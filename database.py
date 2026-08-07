@@ -2,11 +2,20 @@ import os
 import psycopg
 from dotenv import load_dotenv
 import time
+from supabase import create_client, Client
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Supabase Auth
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def get_connection():
     for _ in range(10):

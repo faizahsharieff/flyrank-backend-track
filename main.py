@@ -1,12 +1,15 @@
-from fastapi import FastAPI,HTTPException, Response, status, Request, Depends
+from fastapi import FastAPI,HTTPException, Response, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from database import get_connection, init_db
 from database import supabase  # Import the Supabase client
 
 app = FastAPI(
     title="Task API",
-    description="Week 3 FlyRank Assignment: A CRUD REST API built with FastAPI and PostgreSQL for managing tasks.",
-)
+    description="Week 4 FlyRank Assignment: A secure API powered by Supabase Auth — enabling sign‑up, login, and logout, with JSON Web Token verification to safeguard protected routes.",
+    )
+
+security = HTTPBearer()  # Initialize the HTTPBearer security scheme
 
 @app.on_event("startup")
 def startup():
@@ -92,22 +95,10 @@ def public_info():
         "message": "Welcome stranger! This info is public."
     }
 
-def get_current_user(request: Request):
-    authorization = request.headers.get("Authorization")
-
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Access token required"}
-        )
-
-    token = authorization[7:].strip()
-
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Access token required"}
-        )
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token = credentials.credentials
 
     try:
         response = supabase.auth.get_user(token)

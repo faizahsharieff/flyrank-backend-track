@@ -110,9 +110,31 @@ def protected_profile(request: Request):
             detail={"error": "Access token required"}
         )
 
-    return {
-        "message": "Token received"
-    }
+    try:
+        response = supabase.auth.get_user(token)
+
+        if not response or not response.user:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "Invalid or expired token"}
+            )
+
+        user = response.user
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "created_at": user.created_at
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Invalid or expired token"}
+        )
 
 @app.post("/tasks", status_code=201)
 def create_task(task: TaskCreate):

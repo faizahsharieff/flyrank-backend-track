@@ -1,6 +1,7 @@
 from fastapi import FastAPI,HTTPException, Response, status
 from pydantic import BaseModel
 from database import get_connection, init_db
+from database import supabase  # Import the Supabase client
 
 app = FastAPI(
     title="Task API",
@@ -10,6 +11,10 @@ app = FastAPI(
 @app.on_event("startup")
 def startup():
     init_db()
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
 
 class TaskCreate(BaseModel):
     title: str
@@ -113,6 +118,64 @@ def create_task(task: TaskCreate):
         "done": row[2]
     }
 
+@app.post("/auth/signup", status_code=201)
+def signup(data: AuthRequest):
+    if not data.email or not data.password:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Email and password are required"}
+        )
+
+    try:
+        response = supabase.auth.sign_up({
+            "email": data.email,
+            "password": data.password
+        })
+
+        return {
+            "user": response.user.model_dump() if response.user else None
+        }
+
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Signup failed"}
+        )
+
+@app.post("/auth/login")
+def login(data: AuthRequest):
+    if not data.email or not data.password:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Email and password are required"}
+        )
+
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": data.email,
+            "password": data.password
+        })
+
+        if not response.session:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "Invalid login credentials"}
+            )
+
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Invalid login credentials"}
+        )
+    
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, updated_task: TaskUpdate):
 

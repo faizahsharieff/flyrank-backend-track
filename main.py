@@ -1,4 +1,4 @@
-from fastapi import FastAPI,HTTPException, Response, status
+from fastapi import FastAPI,HTTPException, Response, status, Request
 from pydantic import BaseModel
 from database import get_connection, init_db
 from database import supabase  # Import the Supabase client
@@ -84,6 +84,34 @@ def get_task(task_id: int):
         "id": row[0],
         "title": row[1],
         "done": row[2]
+    }
+
+@app.get("/public/info")
+def public_info():
+    return {
+        "message": "Welcome stranger! This info is public."
+    }
+
+@app.get("/protected/profile")
+def protected_profile(request: Request):
+    authorization = request.headers.get("Authorization")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Access token required"}
+        )
+
+    token = authorization[7:].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Access token required"}
+        )
+
+    return {
+        "message": "Token received"
     }
 
 @app.post("/tasks", status_code=201)

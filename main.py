@@ -1,4 +1,4 @@
-from fastapi import FastAPI,HTTPException, Response, status, Request
+from fastapi import FastAPI,HTTPException, Response, status, Request, Depends
 from pydantic import BaseModel
 from database import get_connection, init_db
 from database import supabase  # Import the Supabase client
@@ -92,8 +92,7 @@ def public_info():
         "message": "Welcome stranger! This info is public."
     }
 
-@app.get("/protected/profile")
-def protected_profile(request: Request):
+def get_current_user(request: Request):
     authorization = request.headers.get("Authorization")
 
     if not authorization or not authorization.startswith("Bearer "):
@@ -119,13 +118,7 @@ def protected_profile(request: Request):
                 detail={"error": "Invalid or expired token"}
             )
 
-        user = response.user
-
-        return {
-            "id": user.id,
-            "email": user.email,
-            "created_at": user.created_at
-        }
+        return response.user
 
     except HTTPException:
         raise
@@ -135,6 +128,22 @@ def protected_profile(request: Request):
             status_code=401,
             detail={"error": "Invalid or expired token"}
         )
+    
+@app.get("/protected/profile")
+def protected_profile(current_user=Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "created_at": current_user.created_at
+    }
+
+@app.get("/protected/dashboard")
+def protected_dashboard(current_user=Depends(get_current_user)):
+    return {
+        "message": "Welcome to your protected dashboard",
+        "user_id": current_user.id,
+        "email": current_user.email
+    }
 
 @app.post("/tasks", status_code=201)
 def create_task(task: TaskCreate):
@@ -224,6 +233,20 @@ def login(data: AuthRequest):
         raise HTTPException(
             status_code=401,
             detail={"error": "Invalid login credentials"}
+        )
+
+@app.post("/auth/logout", status_code=204)
+def logout(
+    current_user=Depends(get_current_user)
+):
+    try:
+        supabase.auth.sign_out()
+        return Response(status_code=204)
+
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Logout failed"}
         )
     
 @app.put("/tasks/{task_id}")

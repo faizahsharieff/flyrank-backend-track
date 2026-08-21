@@ -1,76 +1,148 @@
 import time
 from pathlib import Path
-
+from urllib.parse import urljoin
 import requests
+from bs4 import BeautifulSoup
 
 
-# The catalogue page we want to download
-PAGE_URL = "https://books.toscrape.com/catalogue/page-1.html"
+BASE_URL = "https://books.toscrape.com/"
+FIRST_PAGE_URL = "https://books.toscrape.com/catalogue/page-1.html"
 
-# Location where we will save the downloaded HTML
-CACHE_FILE = Path(__file__).parent.parent / "cache" / "catalogue-page-1.html"
+CACHE_DIR = Path(__file__).parent.parent / "cache"
 
-# Identify our scraper honestly
 USER_AGENT = "FlyRankInternship-A9/1.0"
 
+REQUEST_DELAY = 0.5
 
-def fetch_page():
-    # ---------------------------------------------------------
-    # 1. Check whether we already have a cached copy
-    # ---------------------------------------------------------
-    if CACHE_FILE.exists():
-        html = CACHE_FILE.read_text(encoding="utf-8")
+def fetch_page(url, cache_file):
+    """
+    Fetch a page from the website or read it from the local cache.
+    """
 
-        print("CACHE HIT")
+    if cache_file.exists():
+        html = cache_file.read_text(encoding="utf-8")
+
+        print(f"CACHE HIT {url}")
         print(f"size={len(html)} bytes")
 
         return html
 
-    # ---------------------------------------------------------
-    # 2. No cache exists, so make a real request
-    # ---------------------------------------------------------
-    print("FETCH")
-    print(PAGE_URL)
+    print(f"FETCH {url}")
 
     headers = {
         "User-Agent": USER_AGENT
     }
 
-    try:
-        response = requests.get(
-            PAGE_URL,
-            headers=headers,
-            timeout=10
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=10
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Fetch failed: {url} returned {response.status_code}"
         )
 
-        # -----------------------------------------------------
-        # 3. Check the HTTP status code
-        # -----------------------------------------------------
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"Fetch failed with status {response.status_code}"
+    html = response.text
+
+    cache_file.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    cache_file.write_text(
+        html,
+        encoding="utf-8"
+    )
+
+    print(f"status={response.status_code}")
+    print(f"size={len(html)} bytes")
+
+    return html
+
+
+def discover_books():
+    """
+    Discover all books from the first three catalogue pages.
+    """
+
+    current_url = FIRST_PAGE_URL
+
+    all_book_urls = []
+    catalogue_pages = 0
+
+    while current_url and catalogue_pages < 3:
+
+        catalogue_pages += 1
+
+        # Create a cache filename based on the catalogue page number
+        cache_file = CACHE_DIR / f"catalogue-page-{catalogue_pages}.html"
+
+        html = fetch_page(
+            current_url,
+            cache_file
+        )
+
+        soup = BeautifulSoup(
+            html,
+            "html.parser"
+        )
+
+        # Find all book links on this catalogue page
+
+        book_links = soup.select(
+            "article.product_pod h3 a"
+        )
+
+        for link in book_links:
+
+            href = link.get("href")
+
+            if href:
+                absolute_url = urljoin(
+                    current_url,
+                    href
+                )
+
+                all_book_urls.append(
+                    absolute_url
+                )
+
+        # Find the catalogue's "next" link
+
+        next_link = soup.select_one(
+            "li.next a"
+        )
+
+        if next_link:
+            next_href = next_link.get("href")
+
+            current_url = urljoin(
+                current_url,
+                next_href
             )
 
-        html = response.text
+        else:
+            current_url = None
 
-        # -----------------------------------------------------
-        # 4. Save the HTML to our cache
-        # -----------------------------------------------------
-        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Wait before the next real request
 
-        CACHE_FILE.write_text(
-            html,
-            encoding="utf-8"
-        )
+        if current_url and catalogue_pages < 3:
+            time.sleep(REQUEST_DELAY)
 
-        print(f"status={response.status_code}")
-        print(f"size={len(html)} bytes")
+        # Remove duplicates while preserving order
+        
+    unique_book_urls = list(
+        dict.fromkeys(all_book_urls)
+    )
 
-        return html
+    print()
+    print(f"catalogue_pages={catalogue_pages}")
+    print(f"discovered={len(all_book_urls)}")
+    print(f"unique_urls={len(unique_book_urls)}")
 
-    except requests.RequestException as error:
-        raise RuntimeError(f"Request failed: {error}")
-
+    return unique_book_urls
 
 if __name__ == "__main__":
-    fetch_page()
+    discover_books()

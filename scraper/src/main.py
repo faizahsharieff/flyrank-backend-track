@@ -5,29 +5,37 @@ import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 import re
-
+import json
+from datetime import datetime, timezone
 
 BASE_URL = "https://books.toscrape.com/"
 FIRST_PAGE_URL = "https://books.toscrape.com/catalogue/page-1.html"
 
 CACHE_DIR = Path(__file__).parent.parent / "cache"
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
 
 USER_AGENT = "FlyRankInternship-A9/1.0"
-
 REQUEST_DELAY = 0.5
 
 def fetch_page(url, cache_file):
     """
-    Fetch a page from the website or read it from the local cache.
+    Fetch a page from the website or read it from local cache.
+
+    Retry once for timeouts and 5xx server errors.
+    Do not retry 403 or 404.
     """
 
+    # Cache hit
     if cache_file.exists():
-        html = cache_file.read_text(encoding="utf-8")
+
+        html = cache_file.read_text(
+            encoding="utf-8"
+        )
 
         print(f"CACHE HIT {url}")
         print(f"size={len(html)} bytes")
 
-        return html
+        return html, True
 
     print(f"FETCH {url}")
 
@@ -35,38 +43,107 @@ def fetch_page(url, cache_file):
         "User-Agent": USER_AGENT
     }
 
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=10
-        )
+    for attempt in range(2):
 
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"Fetch failed: {url} returned {response.status_code}"
+        try:
+
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=10
             )
-        html = response.content.decode("utf-8")
-        cache_file.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
 
-        cache_file.write_text(
-            html,
-            encoding="utf-8"
-        )
+            # Successful request
+            if response.status_code == 200:
 
-        print(f"status={response.status_code}")
-        print(f"size={len(html)} bytes")
+                html = response.content.decode(
+                    "utf-8"
+                )
 
-        return html
+                cache_file.parent.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
 
-    except requests.RequestException as error:
-        raise RuntimeError(
-            f"Request failed for {url}: {error}"
-        )
+                cache_file.write_text(
+                    html,
+                    encoding="utf-8"
+                )
 
+                print(
+                    f"status={response.status_code}"
+                )
+
+                print(
+                    f"size={len(html)} bytes"
+                )
+
+                return html, False
+
+            # Do NOT retry 403
+            if response.status_code == 403:
+
+                raise RuntimeError(
+                    f"Fetch failed: {url} returned 403"
+                )
+
+            # Do NOT retry 404
+            if response.status_code == 404:
+
+                raise RuntimeError(
+                    f"Fetch failed: {url} returned 404"
+                )
+
+            # Retry 5xx once
+            if 500 <= response.status_code <= 599:
+
+                if attempt == 0:
+
+                    print(
+                        f"Server error "
+                        f"{response.status_code}. "
+                        f"Retrying once..."
+                    )
+
+                    time.sleep(REQUEST_DELAY)
+
+                    continue
+
+                raise RuntimeError(
+                    f"Fetch failed after retry: "
+                    f"{url} returned "
+                    f"{response.status_code}"
+                )
+
+            # Other HTTP errors
+            raise RuntimeError(
+                f"Fetch failed: "
+                f"{url} returned "
+                f"{response.status_code}"
+            )
+
+        except requests.Timeout:
+
+            if attempt == 0:
+
+                print(
+                    "Request timed out. "
+                    "Retrying once..."
+                )
+
+                time.sleep(REQUEST_DELAY)
+
+                continue
+
+            raise RuntimeError(
+                f"Request timed out after retry: {url}"
+            )
+
+        except requests.RequestException as error:
+
+            raise RuntimeError(
+                f"Request failed for {url}: {error}"
+            )
 
 def discover_books():
     """
@@ -87,7 +164,7 @@ def discover_books():
             f"catalogue-page-{catalogue_pages}.html"
         )
 
-        html = fetch_page(
+        html, _ = fetch_page(
             current_url,
             cache_file
         )
@@ -97,7 +174,7 @@ def discover_books():
             "html.parser"
         )
 
-        # Find all book links on this catalogue page
+        # Find all book links
         book_links = soup.select(
             "article.product_pod h3 a"
         )
@@ -115,8 +192,6 @@ def discover_books():
                 all_book_urls.append(
                     absolute_url
                 )
-
-        # Find the next catalogue page
         next_link = soup.select_one(
             "li.next a"
         )
@@ -136,15 +211,20 @@ def discover_books():
         if current_url and catalogue_pages < 3:
             time.sleep(REQUEST_DELAY)
 
-    # Remove duplicate URLs
     unique_book_urls = list(
         dict.fromkeys(all_book_urls)
     )
 
     print()
-    print(f"catalogue_pages={catalogue_pages}")
-    print(f"discovered={len(all_book_urls)}")
-    print(f"unique_urls={len(unique_book_urls)}")
+    print(
+        f"catalogue_pages={catalogue_pages}"
+    )
+    print(
+        f"discovered={len(all_book_urls)}"
+    )
+    print(
+        f"unique_urls={len(unique_book_urls)}"
+    )
 
     return unique_book_urls
 
@@ -159,12 +239,12 @@ class Book(BaseModel):
     description: str
 
 def normalize_price(value):
-    """
-    Convert a price such as '£45.22' into 45.22.
-    """
 
     if value is None:
-        raise ValueError("Price was not found on the page")
+
+        raise ValueError(
+            "Price was not found on the page"
+        )
 
     match = re.search(
         r"\d+(?:\.\d+)?",
@@ -193,7 +273,9 @@ def normalize_availability(value):
             f"Could not parse availability: {value}"
         )
 
-    return int(value[start + 1:end])
+    return int(
+        value[start + 1:end]
+    )
 
 def normalize_rating(value):
 
@@ -218,12 +300,12 @@ def normalize_rating(value):
     return ratings[value]
 
 def normalize_tax(value):
-    """
-    Convert a tax value such as '£0.00' into 0.0.
-    """
 
     if value is None:
-        raise ValueError("Tax was not found on the page")
+
+        raise ValueError(
+            "Tax was not found on the page"
+        )
 
     match = re.search(
         r"\d+(?:\.\d+)?",
@@ -239,12 +321,16 @@ def normalize_tax(value):
 
 def scrape_book(url, index):
     """
-    Visit one book detail page and extract the eight raw fields.
+    Visit one book detail page and extract
+    the eight raw fields.
     """
 
-    cache_file = CACHE_DIR / f"book-{index:03d}.html"
+    cache_file = (
+        CACHE_DIR /
+        f"book-{index:03d}.html"
+    )
 
-    html = fetch_page(
+    html, cache_hit = fetch_page(
         url,
         cache_file
     )
@@ -254,6 +340,7 @@ def scrape_book(url, index):
         "html.parser"
     )
 
+    # Title
     title_element = soup.select_one(
         "div.product_main h1"
     )
@@ -264,6 +351,7 @@ def scrape_book(url, index):
         else None
     )
 
+    # Price
     price_element = soup.select_one(
         "div.product_main .price_color"
     )
@@ -274,15 +362,21 @@ def scrape_book(url, index):
         else None
     )
 
+    # Availability
     availability_element = soup.select_one(
         "div.product_main .availability"
     )
 
     availability = (
-        availability_element.get_text(" ", strip=True)
+        availability_element.get_text(
+            " ",
+            strip=True
+        )
         if availability_element
         else None
     )
+
+    # Rating
     rating = None
 
     rating_element = soup.select_one(
@@ -291,7 +385,10 @@ def scrape_book(url, index):
 
     if rating_element:
 
-        classes = rating_element.get("class", [])
+        classes = rating_element.get(
+            "class",
+            []
+        )
 
         rating_classes = {
             "One",
@@ -304,8 +401,11 @@ def scrape_book(url, index):
         for class_name in classes:
 
             if class_name in rating_classes:
+
                 rating = class_name
                 break
+
+    # Product information table
     product_info = {}
 
     rows = soup.select(
@@ -313,10 +413,12 @@ def scrape_book(url, index):
     )
 
     for row in rows:
+
         header = row.find("th")
         cell = row.find("td")
 
         if header and cell:
+
             key = header.get_text(
                 " ",
                 strip=True
@@ -329,16 +431,22 @@ def scrape_book(url, index):
 
             product_info[key] = value
 
-
+    # UPC
     upc = product_info.get("UPC")
 
-    product_type = product_info.get("Product Type")
+    # Product Type
+    product_type = product_info.get(
+        "Product Type"
+    )
 
-    # Books to Scrape does not provide a Tax row
+    # Books to Scrape does not provide tax
     tax = "£0.00"
+
+    # Description
     description_element = soup.select_one(
         "#product_description + p"
     )
+
     description = (
         description_element.get_text(
             " ",
@@ -347,6 +455,7 @@ def scrape_book(url, index):
         if description_element
         else None
     )
+
     return {
         "title": title,
         "price": price,
@@ -356,13 +465,17 @@ def scrape_book(url, index):
         "product_type": product_type,
         "tax": tax,
         "description": description,
+        "_cache_hit": cache_hit,
     }
+
 def scrape_all_books(book_urls):
-    """
-    Scrape all 60 individual book pages.
-    """
 
     records = []
+    errors = []
+
+    pages_fetched = 0
+    cache_hits = 0
+    failed_pages = 0
 
     for index, url in enumerate(
         book_urls,
@@ -378,24 +491,38 @@ def scrape_all_books(book_urls):
                 url,
                 index
             )
+            # Track cache/fetch
+            if raw_record["_cache_hit"]:
+
+                cache_hits += 1
+            else:
+                pages_fetched += 1
 
             normalized_record = {
                 "title": raw_record["title"],
                 "price": normalize_price(
                     raw_record["price"]
                 ),
-                "availability": normalize_availability(
-                    raw_record["availability"]
-                ),
+
+                "availability":
+                    normalize_availability(
+                        raw_record["availability"]
+                    ),
+
                 "rating": normalize_rating(
                     raw_record["rating"]
                 ),
                 "upc": raw_record["upc"],
-                "product_type": raw_record["product_type"],
+
+                "product_type":
+                    raw_record["product_type"],
+
                 "tax": normalize_tax(
                     raw_record["tax"]
                 ),
-                "description": raw_record["description"],
+
+                "description":
+                    raw_record["description"],
             }
 
             book = Book(
@@ -406,16 +533,28 @@ def scrape_all_books(book_urls):
 
             if index == 1:
                 print()
-                print("FIRST VALIDATED RECORD")
-                print(book.model_dump())
+                print(
+                    "FIRST VALIDATED RECORD"
+                )
 
-        except Exception as error:
+                print(
+                    book.model_dump()
+                )
+
+        except Exception as exc:
+
             print(
-                f"ERROR scraping {url}: {error}"
+                f"ERROR scraping {url}: {exc}"
             )
 
-        # Wait before the next real request.
-        # Cached pages don't need a delay.
+            failed_pages += 1
+
+            errors.append({
+                "url": url,
+                "error": str(exc)
+            })
+
+        # Delay only before an uncached next request
         if index < len(book_urls):
 
             next_cache_file = (
@@ -424,34 +563,194 @@ def scrape_all_books(book_urls):
             )
 
             if not next_cache_file.exists():
-                time.sleep(REQUEST_DELAY)
 
-    return records
+                time.sleep(
+                    REQUEST_DELAY
+                )
+
+    return (
+        records,
+        errors,
+        pages_fetched,
+        cache_hits,
+        failed_pages
+    )
+
+
+# --------------------------------------------------
+# SAVE JSON
+# --------------------------------------------------
+
+def save_json(filename, data):
+
+    OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output_file = (
+        OUTPUT_DIR / filename
+    )
+
+    with output_file.open(
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            indent=2,
+            ensure_ascii=False
+        )
+
+
+# --------------------------------------------------
+# MAIN
+# --------------------------------------------------
+
 if __name__ == "__main__":
 
+    started_at = datetime.now(
+        timezone.utc
+    )
+
+    # Discover the normal 60 URLs
     book_urls = discover_books()
 
     print()
 
     if len(book_urls) != 60:
+
         raise RuntimeError(
             f"Expected 60 unique book URLs, "
             f"but found {len(book_urls)}"
         )
 
-    records = scrape_all_books(
+    # --------------------------------------------------
+    # STAGE 5 FAILURE TEST
+    # --------------------------------------------------
+
+    # Add ONE fake URL intentionally.
+    book_urls.append(
+        "https://books.toscrape.com/"
+        "catalogue/fake-book-that-does-not-exist_99999/"
+        "index.html"
+    )
+
+    print(
+        f"URLs to process including test failure: "
+        f"{len(book_urls)}"
+    )
+
+    # Scrape
+    (
+        records,
+        errors,
+        pages_fetched,
+        cache_hits,
+        failed_pages
+    ) = scrape_all_books(
         book_urls
     )
 
+    finished_at = datetime.now(
+        timezone.utc
+    )
+
+    # Convert Pydantic models
+    books_data = [
+        book.model_dump()
+        for book in records
+    ]
+
+    # Save books.json
+    save_json(
+        "books.json",
+        books_data
+    )
+
+    # Save errors.json
+    save_json(
+        "errors.json",
+        errors
+    )
+
+    # Duration
+    duration = (
+        finished_at - started_at
+    ).total_seconds()
+
+    # Stage 5 run report
+    run_report = {
+
+        "started_at":
+            started_at.isoformat(),
+
+        "finished_at":
+            finished_at.isoformat(),
+
+        "duration_seconds":
+            duration,
+
+        "pages_fetched":
+            pages_fetched,
+
+        "cache_hits":
+            cache_hits,
+
+        "valid_records":
+            len(records),
+
+        "invalid_records":
+            len(errors),
+
+        "failed_pages":
+            failed_pages,
+    }
+
+    # Save report
+    save_json(
+        "run-report.json",
+        run_report
+    )
+
     print()
-    print(
-        f"records_scraped={len(records)}"
-    )
 
-    cached_books = list(
-        CACHE_DIR.glob("book-*.html")
+    print(
+        f"pages_fetched={pages_fetched}"
     )
 
     print(
-        f"cached_detail_pages={len(cached_books)}"
+        f"cache_hits={cache_hits}"
+    )
+
+    print(
+        f"valid_records={len(records)}"
+    )
+
+    print(
+        f"invalid_records={len(errors)}"
+    )
+
+    print(
+        f"failed_pages={failed_pages}"
+    )
+
+    print()
+
+    print(
+        "Output files created:"
+    )
+
+    print(
+        "  output/books.json"
+    )
+
+    print(
+        "  output/errors.json"
+    )
+
+    print(
+        "  output/run-report.json"
     )

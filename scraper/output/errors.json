@@ -1,0 +1,6 @@
+[
+  {
+    "url": "https://books.toscrape.com/catalogue/fake-book-that-does-not-exist_99999/index.html",
+    "error": "Fetch failed: https://books.toscrape.com/catalogue/fake-book-that-does-not-exist_99999/index.html returned 404"
+  }
+]

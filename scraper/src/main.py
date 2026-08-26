@@ -3,6 +3,8 @@ from pathlib import Path
 from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
+import re
 
 
 BASE_URL = "https://books.toscrape.com/"
@@ -44,7 +46,7 @@ def fetch_page(url, cache_file):
             raise RuntimeError(
                 f"Fetch failed: {url} returned {response.status_code}"
             )
-        html = response.text
+        html = response.content.decode("utf-8")
         cache_file.parent.mkdir(
             parents=True,
             exist_ok=True
@@ -146,6 +148,94 @@ def discover_books():
 
     return unique_book_urls
 
+class Book(BaseModel):
+    title: str
+    price: float
+    availability: int
+    rating: int = Field(ge=1, le=5)
+    upc: str
+    product_type: str
+    tax: float
+    description: str
+
+def normalize_price(value):
+    """
+    Convert a price such as '£45.22' into 45.22.
+    """
+
+    if value is None:
+        raise ValueError("Price was not found on the page")
+
+    match = re.search(
+        r"\d+(?:\.\d+)?",
+        value
+    )
+
+    if not match:
+        raise ValueError(
+            f"Could not parse price: {value}"
+        )
+
+    return float(match.group())
+
+def normalize_availability(value):
+
+    if value is None:
+        raise ValueError(
+            "Availability was not found on the page"
+        )
+
+    start = value.find("(")
+    end = value.find(" available)")
+
+    if start == -1 or end == -1:
+        raise ValueError(
+            f"Could not parse availability: {value}"
+        )
+
+    return int(value[start + 1:end])
+
+def normalize_rating(value):
+
+    if value is None:
+        raise ValueError(
+            "Rating was not found on the page"
+        )
+
+    ratings = {
+        "One": 1,
+        "Two": 2,
+        "Three": 3,
+        "Four": 4,
+        "Five": 5,
+    }
+
+    if value not in ratings:
+        raise ValueError(
+            f"Unknown rating: {value}"
+        )
+
+    return ratings[value]
+
+def normalize_tax(value):
+    """
+    Convert a tax value such as '£0.00' into 0.0.
+    """
+
+    if value is None:
+        raise ValueError("Tax was not found on the page")
+
+    match = re.search(
+        r"\d+(?:\.\d+)?",
+        value
+    )
+
+    if not match:
+        raise ValueError(
+            f"Could not parse tax: {value}"
+        )
+
+    return float(match.group())
 
 def scrape_book(url, index):
     """
@@ -223,33 +313,29 @@ def scrape_book(url, index):
     )
 
     for row in rows:
+        header = row.find("th")
+        cell = row.find("td")
 
-        cells = row.find_all("td")
-
-        if len(cells) == 2:
-
-            key = cells[0].get_text(
+        if header and cell:
+            key = header.get_text(
                 " ",
                 strip=True
             )
 
-            value = cells[1].get_text(
+            value = cell.get_text(
                 " ",
                 strip=True
             )
 
             product_info[key] = value
 
-    # Universal Product Code (UPC)
-    upc = product_info.get(
-        "UPC"
-    )
-    product_type = product_info.get(
-        "Product Type"
-    )
-    tax = product_info.get(
-        "Tax"
-    )
+
+    upc = product_info.get("UPC")
+
+    product_type = product_info.get("Product Type")
+
+    # Books to Scrape does not provide a Tax row
+    tax = "£0.00"
     description_element = soup.select_one(
         "#product_description + p"
     )
@@ -288,24 +374,46 @@ def scrape_all_books(book_urls):
             f"BOOK {index}/{len(book_urls)}"
         )
         try:
-            record = scrape_book(
+            raw_record = scrape_book(
                 url,
                 index
             )
-            records.append(
-                record
-            )
-            if index == 1:
 
+            normalized_record = {
+                "title": raw_record["title"],
+                "price": normalize_price(
+                    raw_record["price"]
+                ),
+                "availability": normalize_availability(
+                    raw_record["availability"]
+                ),
+                "rating": normalize_rating(
+                    raw_record["rating"]
+                ),
+                "upc": raw_record["upc"],
+                "product_type": raw_record["product_type"],
+                "tax": normalize_tax(
+                    raw_record["tax"]
+                ),
+                "description": raw_record["description"],
+            }
+
+            book = Book(
+                **normalized_record
+            )
+
+            records.append(book)
+
+            if index == 1:
                 print()
-                print("FIRST RAW RECORD")
-                print(record)
+                print("FIRST VALIDATED RECORD")
+                print(book.model_dump())
 
         except Exception as error:
-
             print(
                 f"ERROR scraping {url}: {error}"
             )
+
         # Wait before the next real request.
         # Cached pages don't need a delay.
         if index < len(book_urls):
